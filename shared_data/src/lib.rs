@@ -28,7 +28,7 @@ pub fn unix_now_ms() -> u128 {
     }
 }
 
-const MAGIC_NUMBER: u16 = 0xBE47;
+pub const MAGIC_NUMBER: u16 = 0xBE47;
 const SIZE_U16: usize = std::mem::size_of::<u16>();
 const HEADER_SIZE: usize = SIZE_U16 * 2;
 const SIZE_U128: usize = std::mem::size_of::<u128>();

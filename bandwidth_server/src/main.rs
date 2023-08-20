@@ -1,6 +1,8 @@
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::WebSocketUpgrade;
 use axum::{response::IntoResponse, routing::get, Router};
+use shared_data::LatencyTest;
+use tokio::sync::mpsc::Sender;
 use std::net::SocketAddr;
 
 #[tokio::main]
@@ -34,10 +36,10 @@ async fn handle_socket(mut socket: WebSocket) {
             msg = socket.recv() => {
                 match msg {
                     Some(Ok(Message::Binary(bytes))) => {
-                        
-                        /*tokio::spawn(
-                            handle_socket_message(msg, tx.clone())
-                        );*/
+                        // Spawn a new task, so we keep trucking in the meantime
+                        tokio::spawn(
+                            handle_socket_message(bytes, tx.clone())
+                        );
                     }
                     Some(Err(e)) => {
                         tracing::error!("Error receiving message: {:?}", e);
@@ -55,8 +57,8 @@ async fn handle_socket(mut socket: WebSocket) {
             },
             msg = rx.recv() => {
                 match msg {
-                    Some(msg) => {
-                        todo!();
+                    Some(bytes) => {
+                        socket.send(Message::Binary(bytes)).await.unwrap();
                     }
                     None => {
                         tracing::info!("WebSocket Disconnected");
@@ -64,6 +66,28 @@ async fn handle_socket(mut socket: WebSocket) {
                     }
                 }
             },
+        }
+    }
+}
+
+async fn handle_socket_message(bytes: Vec<u8>, tx: Sender<Vec<u8>>) {
+    let decoded = LatencyTest::decode(&bytes).unwrap();
+    match decoded {
+        LatencyTest::InitialRequest { magic } => {
+            assert_eq!(magic, shared_data::MAGIC_NUMBER);
+            let reply = LatencyTest::FirstReply {
+                magic: shared_data::MAGIC_NUMBER,
+                server_time: shared_data::unix_now_ms(),
+            };
+            tx.send(reply.encode()).await.unwrap();
+        }
+        LatencyTest::FirstResponse { magic, server_time, client_time } => {
+            assert_eq!(magic, shared_data::MAGIC_NUMBER);
+            let reply = LatencyTest::SecondReply { magic, server_time, client_time, server_ack_time: shared_data::unix_now_ms() };
+            tx.send(reply.encode()).await.unwrap();
+        }
+        _ => {
+            tracing::warn!("Message not expected by server: {decoded:?}");
         }
     }
 }
