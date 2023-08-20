@@ -10,3 +10,4 @@ axum = { version = "0.6.20", features = ["ws"] }
 tokio = { version = "1.32.0", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
+shared_data = { path = "../shared_data" }

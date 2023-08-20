@@ -1,6 +1,6 @@
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::WebSocketUpgrade;
-use axum::{response::Html, response::IntoResponse, routing::get, Extension, Router};
+use axum::{response::IntoResponse, routing::get, Router};
 use std::net::SocketAddr;
 
 #[tokio::main]
@@ -27,15 +27,16 @@ pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 async fn handle_socket(mut socket: WebSocket) {
     tracing::info!("WebSocket Connected");
 
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(10);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(10);
 
     loop {
         tokio::select! {
             msg = socket.recv() => {
                 match msg {
-                    Some(Ok(msg)) => {
+                    Some(Ok(Message::Binary(bytes))) => {
+                        
                         /*tokio::spawn(
-                            handle_socket_message(msg, cnn.clone(), credentials.clone(), tx.clone())
+                            handle_socket_message(msg, tx.clone())
                         );*/
                     }
                     Some(Err(e)) => {
@@ -46,12 +47,16 @@ async fn handle_socket(mut socket: WebSocket) {
                         tracing::info!("WebSocket Disconnected");
                         break;
                     }
+                    _ => {
+                        tracing::error!("Message in non-binary format");
+                        break;
+                    }
                 }
             },
             msg = rx.recv() => {
                 match msg {
                     Some(msg) => {
-                        socket.send(msg).await.unwrap();
+                        todo!();
                     }
                     None => {
                         tracing::info!("WebSocket Disconnected");

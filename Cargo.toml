@@ -1,0 +1,12 @@
+[package]
+name = "web_bandwidth"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[workspace]
+members = [ 
+  "bandwidth_server", 
+  "shared_data",
+]
