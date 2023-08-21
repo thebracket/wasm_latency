@@ -27,6 +27,9 @@ function reportLatency(avg: Number, server: Number, client: Number) {
     }
 
     let bin = Math.floor(avg.valueOf() / BAND_DIVISOR);
+    if (bin >= N_BANDS) {
+        bin = N_BANDS - 1;
+    }
     window.frequency[bin] += 1;
 
     let html = "<table border='0'>";
