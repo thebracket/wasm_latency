@@ -230,7 +230,7 @@ impl LatencyTest {
             } => {
                 let server_latency = (server_ack_time - server_time) as f64;
                 let client_latency = (client_ack_time - client_time) as f64;
-                let latency = server_latency - (client_latency * 0.5);
+                let latency = (server_latency + client_latency) * 0.5;
                 (latency, server_latency , client_latency)
             }
             _ => (0., 0., 0.),
