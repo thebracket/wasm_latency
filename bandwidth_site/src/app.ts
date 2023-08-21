@@ -1,6 +1,6 @@
-import init, { initialize_wss, is_wasm_connected, start_latency_run } from '../wasm/wasm_client.js';
+import init, { LatencyClient } from '../wasm/wasm_client.js';
 
-function setSpanText(id: string, text: string) : void {
+function setSpanText(id: string, text: string): void {
     let item = document.getElementById(id);
     if (item) {
         item.innerText = text;
@@ -15,9 +15,21 @@ function reportLatency(avg: Number, server: Number, client: Number) {
     setSpanText("serverLatency", server.toString() + " ms");
 }
 
+function latencyUrl() : string {
+    let url = "";
+    const currentUrlWithoutAnchors = window.location.href.split('#')[0].replace("https://", "").replace("http://", "");
+    if (window.location.href.startsWith("https://")) {
+        url = "wss://" + currentUrlWithoutAnchors + "ws";
+    } else {
+        url = "ws://" + currentUrlWithoutAnchors + "ws";
+    }
+    return url;
+}
+
 declare global {
     interface Window {
         reportLatency: typeof reportLatency,
+        latencyClient: LatencyClient,
     }
 }
 window.reportLatency = reportLatency;
@@ -27,12 +39,15 @@ await init();
 console.log("WASM Loaded");
 
 // Connect
-initialize_wss("ws://localhost:3000/ws");
+let latencyClient = new LatencyClient(latencyUrl());
+window.latencyClient = latencyClient;
+window.latencyClient.connect_socket();
 
 // Loop
 window.setInterval(() => {
-    if (is_wasm_connected()) {
-        console.log("WASM Connected");
-        start_latency_run();
+    console.log("Tick");
+    if (window.latencyClient.is_connected()) {
+        console.log("We're connected");
+        window.latencyClient.start_latency_run();
     }
 }, 1000);

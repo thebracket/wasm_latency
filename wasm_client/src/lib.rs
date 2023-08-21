@@ -1,12 +1,11 @@
 //! WebAssembly Client. Designed to be loaded as part of the embedded
 //! website, rather than used standalone.
 
+use std::{cell::RefCell, rc::Rc};
 use shared_data::{LatencyTest, MAGIC_NUMBER};
 use thiserror::Error;
 use wasm_bindgen::prelude::*;
 use web_sys::{BinaryType, ErrorEvent, MessageEvent, WebSocket};
-
-static mut CONDUIT: Option<Conduit> = None;
 
 #[wasm_bindgen]
 extern "C" {
@@ -15,58 +14,6 @@ extern "C" {
 
     #[wasm_bindgen(js_name = "window.reportLatency")]
     fn report_latency(average: f64, server: f64, client: f64);
-}
-
-#[wasm_bindgen]
-pub fn initialize_wss(url: String) {
-    log(&format!("Initializing WSS to: {url}"));
-    unsafe {
-        if CONDUIT.is_none() {
-            CONDUIT = Some(Conduit::new(url));
-
-            if let Some(conduit) = &mut CONDUIT {
-                match conduit.connect() {
-                    Ok(_) => log("Connection requested."),
-                    Err(e) => log(&format!("Error connecting: {:?}", e)),
-                }
-            }
-        } else {
-            log("Conduit already initialized");
-        }
-    }
-}
-
-#[wasm_bindgen]
-pub fn is_wasm_connected() -> bool {
-    unsafe {
-        if let Some(conduit) = &CONDUIT {
-            conduit.is_connected()
-        } else {
-            false
-        }
-    }
-}
-
-#[wasm_bindgen]
-pub fn start_latency_run() {
-    unsafe {
-        if let Some(conduit) = &mut CONDUIT {
-            if conduit.is_connected() {
-                log("Starting Latency Run");
-                let bytes = LatencyTest::InitialRequest {
-                    magic: MAGIC_NUMBER,
-                }
-                .encode();
-                if let Some(socket) = &mut conduit.socket {
-                    socket.send_with_u8_array(&bytes).unwrap();
-                }
-            } else {
-                log("Not connected");
-            }
-        } else {
-            log("Not initialized");
-        }
-    }
 }
 
 pub fn unix_now_ms() -> u128 {
@@ -96,66 +43,89 @@ enum ConnectionStatus {
 }
 
 /// Handles WS connection to the server.
-struct Conduit {
+#[wasm_bindgen]
+pub struct LatencyClient {
+    inner: Rc<RefCell<LatencyClientInner>>,
+}
+
+struct LatencyClientInner {
     status: ConnectionStatus,
     socket: Option<WebSocket>,
     url: String,
 }
 
-impl Conduit {
-    fn new(url: String) -> Self {
+#[wasm_bindgen]
+impl LatencyClient {
+    #[wasm_bindgen(constructor)]
+    pub fn new(url: String) -> Self {
         Self {
-            status: ConnectionStatus::New,
-            socket: None,
-            url,
+            inner: Rc::new(RefCell::new(LatencyClientInner {
+                status: ConnectionStatus::New,
+                socket: None,
+                url,
+            })),
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn connect_socket(&mut self) {
+        match self.connect() {
+            Ok(_) => log("Connection requested."),
+            Err(e) => log(&format!("Error connecting: {:?}", e)),
         }
     }
 
     fn connect(&mut self) -> Result<(), WebSocketError> {
         // Precondition testing
-        if self.url.is_empty() {
+        if self.inner.borrow().url.is_empty() {
             return Err(WebSocketError::NoURL);
         }
-        if self.status != ConnectionStatus::New {
+        if self.inner.borrow().status != ConnectionStatus::New {
             return Err(WebSocketError::AlreadyConnected);
         }
-        if self.socket.is_some() {
+        if self.inner.borrow().socket.is_some() {
             return Err(WebSocketError::AlreadyExists);
         }
-        log(&format!("Connecting to: {}", self.url));
-        let conn_result = WebSocket::new(&self.url);
+        log(&format!("Connecting to: {}", self.inner.borrow().url));
+        let conn_result = WebSocket::new(&self.inner.borrow().url);
         if conn_result.is_err() {
             log(&format!("Error connecting: {:?}", conn_result));
             return Err(WebSocketError::CreationError);
         }
-        self.socket = Some(conn_result.unwrap());
-        if let Some(socket) = &mut self.socket {
+        self.inner.borrow_mut().socket = Some(conn_result.unwrap());
+        if let Some(socket) = &self.inner.borrow().socket {
             socket.set_binary_type(BinaryType::Arraybuffer);
 
             // Wire up on_close
+            let inner = self.inner.clone();
             let onclose_callback = Closure::<dyn FnMut(_)>::new(move |_e: ErrorEvent| {
-                on_close();
+                inner.borrow_mut().socket = None;
+                inner.borrow_mut().status = ConnectionStatus::New;
             });
             socket.set_onclose(Some(onclose_callback.as_ref().unchecked_ref()));
             onclose_callback.forget();
 
             // Wire up on_error
+            let inner = self.inner.clone();
             let onerror_callback = Closure::<dyn FnMut(_)>::new(move |e: ErrorEvent| {
                 log(&format!("Error Received: {e:?}"));
-                on_error()
+                inner.borrow_mut().socket = None;
+                inner.borrow_mut().status = ConnectionStatus::New;
             });
             socket.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
             onerror_callback.forget();
 
             // Wire up on_open
+            let inner = self.inner.clone();
             let onopen_callback = Closure::<dyn FnMut(_)>::new(move |_e: ErrorEvent| {
                 //log("Open Received");
-                on_open();
+                inner.borrow_mut().status = ConnectionStatus::Connected;
             });
             socket.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
             onopen_callback.forget();
 
             // Wire up on message
+            let onmsg_inner = self.inner.clone();
             let onmessage_callback = Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
                 log("Message Received");
                 if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
@@ -170,14 +140,17 @@ impl Conduit {
                                 server_time,
                                 client_time: unix_now_ms(),
                             };
-                            unsafe {
-                                if let Some(socket) = &mut CONDUIT.as_mut().unwrap().socket {
-                                    socket.send_with_u8_array(&reply.encode()).unwrap();
-                                }
+                            if let Some(socket) = &onmsg_inner.borrow().socket {
+                                socket.send_with_u8_array(&reply.encode()).unwrap();
                             }
                         }
-                        LatencyTest::SecondReply { magic, server_time, client_time, server_ack_time } => {
-                            assert_eq!(magic, MAGIC_NUMBER);                            
+                        LatencyTest::SecondReply {
+                            magic,
+                            server_time,
+                            client_time,
+                            server_ack_time,
+                        } => {
+                            assert_eq!(magic, MAGIC_NUMBER);
                             let final_result = LatencyTest::Final {
                                 magic: MAGIC_NUMBER,
                                 server_time,
@@ -186,7 +159,10 @@ impl Conduit {
                                 client_ack_time: unix_now_ms(),
                             };
                             let (average, server, client) = final_result.calculate_latency();
-                            log(&format!("Average: {}ms, Server: {}ms, Client: {}ms", average, server, client));
+                            log(&format!(
+                                "Average: {}ms, Server: {}ms, Client: {}ms",
+                                average, server, client
+                            ));
                             report_latency(average, server, client);
                         }
                         _ => {
@@ -202,33 +178,19 @@ impl Conduit {
         Ok(())
     }
 
-    fn is_connected(&self) -> bool {
-        self.status == ConnectionStatus::Connected
+    #[wasm_bindgen]
+    pub fn is_connected(&self) -> bool {
+        self.inner.borrow().status == ConnectionStatus::Connected
     }
-}
 
-fn on_close() {
-    unsafe {
-        if let Some(conduit) = &mut CONDUIT {
-            conduit.socket = None;
-            conduit.status = ConnectionStatus::New;
+    #[wasm_bindgen]
+    pub fn start_latency_run(&self) {
+        let bytes = LatencyTest::InitialRequest {
+            magic: MAGIC_NUMBER,
         }
-    }
-}
-
-fn on_error() {
-    unsafe {
-        if let Some(conduit) = &mut CONDUIT {
-            conduit.socket = None;
-            conduit.status = ConnectionStatus::New;
-        }
-    }
-}
-
-fn on_open() {
-    unsafe {
-        if let Some(conduit) = &mut CONDUIT {
-            conduit.status = ConnectionStatus::Connected;
+        .encode();
+        if let Some(socket) = &self.inner.borrow().socket {
+            socket.send_with_u8_array(&bytes).unwrap();
         }
     }
 }
