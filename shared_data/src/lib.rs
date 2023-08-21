@@ -206,6 +206,24 @@ impl LatencyTest {
             _ => Err(LatencyTestError::BadRequest),
         }
     }
+
+    pub fn calculate_latency(&self) -> (f64, f64, f64) {
+        match self {
+            LatencyTest::Final {
+                server_time,
+                client_time,
+                server_ack_time,
+                client_ack_time,
+                ..
+            } => {
+                let server_latency = (server_ack_time - server_time) as f64;
+                let client_latency = (client_ack_time - client_time) as f64;
+                let latency = server_latency - (client_latency * 0.5);
+                (latency, server_latency , client_latency)
+            }
+            _ => (0., 0., 0.),
+        }
+    }
 }
 
 #[derive(Error, Debug)]

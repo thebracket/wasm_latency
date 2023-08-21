@@ -1,1 +1,5 @@
 /target
+bandwidth_site/node_modules
+bandwidth_site/out
+bandwidth_site/wasm
+wasm_client/staging

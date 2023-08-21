@@ -9,4 +9,5 @@ edition = "2021"
 members = [ 
   "bandwidth_server", 
   "shared_data",
+  "wasm_client",
 ]

@@ -28,3 +28,9 @@ General:
 * https://ankitbko.github.io/blog/2022/06/websocket-latency/
 
 
+## Project Structure
+
+* `bandwidth_server` - an Axum/Tokio Rust server that hosts the tests.
+* `shared_data` - data structures that are shared between client and server, along with helper functions to use them.
+* `wasm_client` - a WebAssembly client designed to run in the browser. Not stand-alone.
+* `bandwidth_site` - (Not yet implemented) A Typescript site designed to be server from the bandwidth server, provide the client to the end-user's browser, and display the results.

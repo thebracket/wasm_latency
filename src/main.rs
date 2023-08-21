@@ -1,3 +1,3 @@
 fn main() {
-    println!("You probably meant to run a project within the workspace.");
+    println!("You probably meant to run a child project.");
 }
