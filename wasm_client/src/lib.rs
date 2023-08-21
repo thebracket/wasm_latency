@@ -12,6 +12,9 @@ static mut CONDUIT: Option<Conduit> = None;
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
+
+    #[wasm_bindgen(js_name = "window.reportLatency")]
+    fn report_latency(average: f64, server: f64, client: f64);
 }
 
 #[wasm_bindgen]
@@ -184,6 +187,7 @@ impl Conduit {
                             };
                             let (average, server, client) = final_result.calculate_latency();
                             log(&format!("Average: {}ms, Server: {}ms, Client: {}ms", average, server, client));
+                            report_latency(average, server, client);
                         }
                         _ => {
                             log(&format!("Received: {:?}", decoded));
