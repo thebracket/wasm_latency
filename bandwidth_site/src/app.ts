@@ -45,9 +45,7 @@ window.latencyClient.connect_socket();
 
 // Loop
 window.setInterval(() => {
-    console.log("Tick");
     if (window.latencyClient.is_connected()) {
-        console.log("We're connected");
         window.latencyClient.start_latency_run();
     }
 }, 1000);

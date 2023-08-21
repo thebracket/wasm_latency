@@ -3,7 +3,9 @@ name = "shared_data"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 thiserror = "1.0.47"
+
+# Only compile in the web-time dependency when targeting wasm32
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "0.2"

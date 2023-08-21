@@ -2,7 +2,7 @@
 //! website, rather than used standalone.
 
 use std::{cell::RefCell, rc::Rc};
-use shared_data::{LatencyTest, MAGIC_NUMBER};
+use shared_data::{LatencyTest, MAGIC_NUMBER, unix_now_ms};
 use thiserror::Error;
 use wasm_bindgen::prelude::*;
 use web_sys::{BinaryType, ErrorEvent, MessageEvent, WebSocket};
@@ -14,14 +14,6 @@ extern "C" {
 
     #[wasm_bindgen(js_name = "window.reportLatency")]
     fn report_latency(average: f64, server: f64, client: f64);
-}
-
-pub fn unix_now_ms() -> u128 {
-    use web_time::SystemTime;
-    match SystemTime::now().duration_since(web_time::UNIX_EPOCH) {
-        Ok(t) => t.as_millis(),
-        Err(_e) => 0,
-    }
 }
 
 #[derive(Error, Debug)]

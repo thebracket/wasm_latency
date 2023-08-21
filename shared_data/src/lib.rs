@@ -21,8 +21,20 @@ use thiserror::Error;
 
 /// Helper function to get the current time in ms since the UNIX epoch.
 /// This corresponds to JavaScript's `now()` function.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn unix_now_ms() -> u128 {
     match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(t) => t.as_millis(),
+        Err(_e) => 0,
+    }
+}
+
+/// Helper function to get the current time in ms since the UNIX epoch.
+/// This corresponds to JavaScript's `now()` function. (WASM version)
+#[cfg(target_arch = "wasm32")]
+pub fn unix_now_ms() -> u128 {
+    use web_time::SystemTime;
+    match SystemTime::now().duration_since(web_time::UNIX_EPOCH) {
         Ok(t) => t.as_millis(),
         Err(_e) => 0,
     }

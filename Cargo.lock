@@ -699,6 +699,7 @@ name = "shared_data"
 version = "0.1.0"
 dependencies = [
  "thiserror",
+ "web-time",
 ]
 
 [[package]]
@@ -1108,7 +1109,6 @@ dependencies = [
  "thiserror",
  "wasm-bindgen",
  "web-sys",
- "web-time",
 ]
 
 [[package]]
