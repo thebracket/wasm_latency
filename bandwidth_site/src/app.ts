@@ -1,5 +1,8 @@
 import init, { LatencyClient } from '../wasm/wasm_client.js';
 
+const N_BANDS = 20;
+const BAND_DIVISOR = 10.0;
+
 function setSpanText(id: string, text: string): void {
     let item = document.getElementById(id);
     if (item) {
@@ -13,6 +16,28 @@ function reportLatency(avg: Number, server: Number, client: Number) {
     setSpanText("averageLatency", avg.toString() + " ms");
     setSpanText("clientLatency", client.toString() + " ms");
     setSpanText("serverLatency", server.toString() + " ms");
+
+    if (avg > window.worst) {
+        window.worst = avg;
+        setSpanText("worstLatency", avg.toString() + " ms");
+    }
+    if (avg < window.best) {
+        window.best = avg;
+        setSpanText("bestLatency", avg.toString() + " ms");
+    }
+
+    let bin = Math.floor(avg.valueOf() / BAND_DIVISOR);
+    window.frequency[bin] += 1;
+
+    let html = "<table border='0'>";
+    for (let i=0; i<N_BANDS; i++) {
+        html += "<tr><td>" + (i * BAND_DIVISOR) + " - " + ((i+1) * BAND_DIVISOR) + "</td><td>" + window.frequency[i] + "</td></tr>";
+    }
+    html += "</table>";
+    let target = document.getElementById("histo");
+    if (target) {
+        target.innerHTML = html;
+    }
 }
 
 function latencyUrl() : string {
@@ -30,9 +55,18 @@ declare global {
     interface Window {
         reportLatency: typeof reportLatency,
         latencyClient: LatencyClient,
+        worst: Number,
+        best: Number,
+        frequency: number[],
     }
 }
 window.reportLatency = reportLatency;
+window.worst = 0;
+window.best = 10000;
+window.frequency = [];
+for (let i=0; i<N_BANDS; i++) {
+    window.frequency.push(0);
+}
 
 // Load the WASM Module
 await init();
